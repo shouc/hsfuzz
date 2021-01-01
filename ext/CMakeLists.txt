@@ -18,10 +18,10 @@ include_directories(${PHP_SOURCE})
 include_directories(${PHP_SOURCE}/main)
 include_directories(${PHP_SOURCE}/Zend)
 include_directories(${PHP_SOURCE}/TSRM)
-include_directories(${PROJECT_SOURCE_DIR})
+include_directories(..)
 add_custom_target(configure
-        COMMAND phpize && ./configure
+        COMMAND phpize && configure
         DEPENDS ${SOURCE_FILES}
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+        WORKING_DIRECTORY ..)
 
 add_library(___ SHARED ${SOURCE_FILES})
