@@ -1,6 +1,17 @@
 # HSFuzz
 
 A whitebox coverage-guided {Fuzzer, Crawler, Explorer} for PHP Apps.
+### Paper
+In progress
+
+### Benchmark
+On 12 cores 96G RAM machine with 20 threads fuzzing `test/` hosted using Nginx and fpm:
+
+| Name       | Time    | Coverage |
+|------------|---------|----------|
+| HSFuzz     | 2.42s   | 100%     |
+| Netsparker | 140.88s | 50%      |
+| PHP-Fuzzer | 72.06s  | 100%     |
 
 ### Download
 ```bash
