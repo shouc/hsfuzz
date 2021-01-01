@@ -3,9 +3,6 @@ dnl config.m4 for extension hsfuzz
 m4_include(ax_cxx_compile_stdcxx_11.m4)
 AX_CXX_COMPILE_STDCXX_11
 
-sinclude(./autoconf/pecl.m4)
-sinclude(./autoconf/php-executable.m4)
-
 PECL_INIT([hsfuzz])
 
 PHP_ARG_ENABLE(hsfuzz, whether to enable hsfuzz, [ --enable-hsfuzz   Enable hsfuzz])
