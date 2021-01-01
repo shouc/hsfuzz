@@ -1,5 +1,8 @@
 import re
-import docker
+try:
+    import docker
+except ImportError:
+    pass
 
 USE_DOCKER = False
 # Don't Use Docker
@@ -7,7 +10,7 @@ TARGET = "localhost"
 HOST_NAMES_CARED = [TARGET]
 
 # Use Docker
-DOCKER_INSTANCE = docker.from_env()
+DOCKER_INSTANCE = docker.from_env() if USE_DOCKER else None
 DOCKER_FILE_LOC = ""
 
 # Config for Crawling

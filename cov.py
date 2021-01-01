@@ -1,7 +1,4 @@
 import requests
-from typing import List
-
-import config
 import utils
 import uuid
 import docker_utils
@@ -43,9 +40,10 @@ def evaluate_cov(cov_uuid):
     global COV_COUNT
     for i in bitmap:
         cnt = bitmap[i]
+        i_b = str(i).encode('latin-1')
         available_bucket = 0b1111
-        if str(i) in bitmap_glob:
-            available_bucket = int(bitmap_glob[str(i)])
+        if i_b in bitmap_glob:
+            available_bucket = int(bitmap_glob[i_b])
         has_new_cov = False
         new_bucket = available_bucket
         if cnt == 1 and available_bucket & 1:

@@ -3,8 +3,6 @@ dnl config.m4 for extension hsfuzz
 m4_include(ax_cxx_compile_stdcxx_11.m4)
 AX_CXX_COMPILE_STDCXX_11
 
-PECL_INIT([hsfuzz])
-
 PHP_ARG_ENABLE(hsfuzz, whether to enable hsfuzz, [ --enable-hsfuzz   Enable hsfuzz])
 
 if test "$PHP_hsfuzz" != "no"; then
