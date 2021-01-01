@@ -11,7 +11,7 @@ On 12 cores 96G RAM machine with 20 threads fuzzing `test/` hosted using Nginx a
 |------------|---------|----------|
 | HSFuzz     | 2.42s   | 100%     |
 | Netsparker | 140.88s | 50%      |
-| PHP-Fuzzer | 72.06s  | 100%     |
+| PHP-Fuzzer (Modified) | 72.06s  | 100%     |
 
 ### Download
 ```bash
