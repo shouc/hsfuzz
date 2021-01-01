@@ -1,8 +1,8 @@
 /*
   +----------------------------------------------------------------------+
-  | Skeleton PHP extension                                               |
+  | PHP extension for Coverage Bitmap                                    |
   +----------------------------------------------------------------------+
-  | Copyright (c) 2018 NAME                                              |
+  | Copyright (c) 2020                                                   |
   +----------------------------------------------------------------------+
   | Permission is hereby granted, free of charge, to any person          |
   | obtaining a copy of this software and associated documentation files |
@@ -24,7 +24,7 @@
   | CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE     |
   | SOFTWARE.                                                            |
   +----------------------------------------------------------------------+
-  | Author: NAME <EMAIL@EXAMPLE.COM>                                     |
+  | Author: Chaofan Shou <shou@ucsb.edu>                                 |
   +----------------------------------------------------------------------+
 */
 
@@ -34,15 +34,15 @@
 
 #include "php.h"
 #include "php_ini.h"
-#include "php_pcon.h"
+#include "php_hsfuzz.h"
 #include "zend_exceptions.h"
 #include "ext/standard/info.h"
-#include "smtlib.h"
 #include <map>
 #include <sstream>
+#include <fstream>
 
-#define HAVE_PCON 1
-#if HAVE_PCON
+#define HAVE_HSFUZZ 1
+#if HAVE_HSFUZZ
 
 zval *get_zval(zend_execute_data *zdata, int node_type, const znode_op *node)
 {
@@ -50,401 +50,140 @@ zval *get_zval(zend_execute_data *zdata, int node_type, const znode_op *node)
     zval* r = zend_get_zval_ptr(zdata->opline, node_type, node, zdata, &should_free, BP_VAR_IS);
     return r;
 }
-void force_ref(zval *val) {
-    if (!Z_ISREF_P(val) &&
-        (Z_TYPE_P(val) != IS_INDIRECT) &&
-        (Z_TYPE_P(val) != IS_CONST) &&
-        (Z_TYPE_P(val) != IS_CONSTANT_AST))
-    {
-        if (Z_TYPE_P(val) == IS_UNDEF) {
-            ZVAL_NEW_EMPTY_REF(val);
-            Z_SET_REFCOUNT_P(val, 2);
-            ZVAL_NULL(Z_REFVAL_P(val));
-        }
-        else {
-            ZVAL_MAKE_REF(val);
-        }
+
+#define BM_SIZE 1<<8
+#define BM_SIZE_MA 1<<7
+unsigned char bitmap[BM_SIZE];
+#define line_number execute_data->opline->lineno
+#define bm_loc bitmap[(line_number % (BM_SIZE_MA)) << (is_equal ? 1 : 0)]
+#define b_comp(func) \
+    {                \
+        func(result, op1, op2);\
+        auto is_equal = Z_TYPE_P(result) == IS_TRUE;\
+        bm_loc += 1; \
+        bm_loc %= 127;       \
+        break;\
     }
+#define MAX_DEPTH 1
+unsigned int countSlash(char* path){
+    unsigned int count = 0;
+    char* curr_path(path);
+    while (*curr_path != 0){
+        if (*curr_path == '/')
+            count++;
+        curr_path++;
+    }
+    return count;
 }
+unsigned int FP_SLASH_COUNT;
 
-
-
-std::map<void*, void*> ref_to_ref;
-std::map<void*, zval*> ref_to_res;
-std::map<void*, std::string> ref_to_expr;
-smt* smt_sink;
-
-
-
-
-
-inline void retrieve_ref_by_zv(void* ref, zval*& res){
-    if (ref_to_res.find(ref) == ref_to_res.end()){
-        if (ref_to_ref.find(ref) == ref_to_ref.end())
-            res = nullptr;
-        else
-            retrieve_ref_by_zv(ref_to_ref[ref], res);
-    }
-    else
-        res =  ref_to_res[ref];
-}
-
-void retrieve_ref_by_expr(void* ref, std::string& expr, const std::string& type, unsigned int lo){
-    if (ref_to_expr.find(ref) == ref_to_expr.end()){
-        if (ref_to_ref.find(ref) == ref_to_ref.end()) {
-            std::ostringstream expr_name;
-            expr_name << ref;
-            smt_sink->declare_const(expr_name.str(), type, lo);
-            ref_to_expr[ref] = expr_name.str();
-            expr = expr_name.str();
-        }
-        else
-            retrieve_ref_by_expr(ref_to_ref[ref], expr, type, lo);
-    }
-    else
-        expr = ref_to_expr[ref];
-}
-
-#define retrieve_ref(ref, l_type, lo) \
-    zval* op_res;                         \
-    std::string op_expr;                                       \
-    retrieve_ref_by_zv(ref, op_res);\
-    if (op_res == nullptr)                \
-        retrieve_ref_by_expr(ref, op_expr, l_type, lo);
-#define __line_number  execute_data->opline->lineno
-void handle_assign(zend_execute_data* execute_data,
-                   zval* op1,
-                   zval* op2,
-                   unsigned int& T){
-    php_printf("x");
-    switch (Z_TYPE_P(op1)) {
-        case IS_NULL:
-        case IS_UNDEF:
-            force_ref(op1);
-            handle_assign(execute_data, op1, op2, T);
-            return;
-        case IS_REFERENCE:
-            switch (Z_TYPE_P(op2)) {
-                case IS_RESOURCE:
-                case IS_OBJECT:
-                case IS_ARRAY:
-                {
-                    std::string op_expr;
-                    retrieve_ref_by_expr(Z_RES_VAL_P(op2), op_expr, "Int", __line_number);
-                    insert_or_assign_cc17(ref_to_expr, Z_REFVAL_P(op1), op_expr)
-                    break;
-                }
-                case IS_LONG:
-                case IS_DOUBLE:
-                case IS_TRUE:
-                case IS_FALSE:
-                case IS_STRING:
-                    insert_or_assign_cc17(ref_to_res, Z_REFVAL_P(op1), op2)
-                    break;
-                case IS_REFERENCE:
-                {
-                    retrieve_ref(Z_REFVAL_P(op2), "Int", __line_number)
-                    if (op_res != nullptr){
-                        insert_or_assign_cc17(ref_to_res, Z_REFVAL_P(op1), op_res)
-                    } else {
-                        insert_or_assign_cc17(ref_to_expr, Z_REFVAL_P(op1), op_expr)
-                    }
-                    break;
-                }
-                default:
-                    php_printf("UNKNOWN OP: Assign by type %d\n", Z_TYPE_P(op2));
-                    break;
-            }
-            break;
-        default:
-            php_printf("UNKNOWN OP: Assign to type %d\n", Z_TYPE_P(op1));
-            break;
-    }
-}
-#define __is_not_res_op1 op1_res == nullptr
-#define __is_not_res_op2 op2_res == nullptr
-#define __equal_then_else(op1, op2) \
-        if (is_equal)     \
-            {op1}           \
-        else              \
-            {op2}
-void handle_equal(zend_execute_data* execute_data,
-                   zval* op1,
-                   zval* op2,
-                   bool is_equal,
-                   unsigned int& T) {
-
-    zval *op1_res;
-    std::string op1_expr;
-    if (Z_TYPE_P(op1) == IS_REFERENCE) {
-        retrieve_ref_by_zv(Z_REFVAL_P(op1), op1_res);
-        if (__is_not_res_op1) {
-            switch (Z_TYPE_P(op2)) {
-                case IS_TRUE:
-                case IS_FALSE:
-                    retrieve_ref_by_expr(Z_REFVAL_P(op1), op1_expr, "Bool", __line_number);
-                    break;
-                case IS_STRING:
-                    retrieve_ref_by_expr(Z_REFVAL_P(op1), op1_expr, "String", __line_number);
-                    break;
-                default:
-                    // todo: add support for op2 ref
-                    retrieve_ref_by_expr(Z_REFVAL_P(op1), op1_expr, "Int", __line_number);
-                    break;
-            }
-        }
-    } else
-        op1_res = op1;
-
-    zval *op2_res;
-    std::string op2_expr;
-    if (Z_TYPE_P(op2) == IS_REFERENCE) {
-        retrieve_ref_by_zv(Z_REFVAL_P(op2), op2_res);
-        if (__is_not_res_op2) {
-            switch (op1_res == nullptr ? IS_LONG : Z_TYPE_P(op1_res)) {
-                case IS_LONG:
-                    retrieve_ref_by_expr(Z_REFVAL_P(op2), op2_expr, "Int", __line_number);
-                    break;
-                case IS_TRUE:
-                case IS_FALSE:
-                    retrieve_ref_by_expr(Z_REFVAL_P(op2), op2_expr, "Bool", __line_number);
-                    break;
-                case IS_STRING:
-                    retrieve_ref_by_expr(Z_REFVAL_P(op2), op2_expr, "String", __line_number);
-                    break;
-                default:
-                    // todo: add support for op2 ref
-                    retrieve_ref_by_expr(Z_REFVAL_P(op2), op2_expr, "Int", __line_number);
-                    break;
-            }
-        }
-    } else
-        op2_res = op2;
-
-    if (__is_not_res_op1 && !(__is_not_res_op2)) {
-        // op1 is expr, op2 is res
-        switch (Z_TYPE_P(op2_res)) {
-            case IS_LONG:
-                __equal_then_else(
-                        smt_sink->add_equal(op1_expr, Z_LVAL_P(op2_res), __line_number);,
-                        smt_sink->add_nequal(op1_expr, Z_LVAL_P(op2_res), __line_number);
-                )
-                break;
-            case IS_TRUE:
-                smt_sink->add_equal(op1_expr, is_equal, __line_number);
-                break;
-            case IS_FALSE:
-                smt_sink->add_equal(op1_expr, !is_equal, __line_number);
-                break;
-            case IS_RESOURCE:
-            case IS_OBJECT:
-            case IS_ARRAY: {
-                std::string op_expr;
-                retrieve_ref_by_expr(Z_RES_VAL_P(op2), op_expr, "Int", __line_number);
-                __equal_then_else(
-                        smt_sink->add_equal_expr(op1_expr, op_expr, __line_number);,
-                        smt_sink->add_equal_expr(op1_expr, op_expr, __line_number);
-                )
-                break;
-            }
-            default:
-                php_printf("UNKNOWN OP: Unsupported type %d at %d\n", Z_TYPE_P(op2_res), __line_number);
-        }
-    }
-
-    if (__is_not_res_op1 && __is_not_res_op2){
-        // both are expr
-        __equal_then_else(
-                smt_sink->add_equal_expr(op1_expr, op2_expr, __line_number);,
-                smt_sink->add_nequal_expr(op1_expr, op2_expr, __line_number);
-        )
-    }
-
-    if (!(__is_not_res_op1) && __is_not_res_op2){
-        // op1 is res, op2 expr
-        return handle_equal(execute_data, op2, op1, is_equal, T);
-    }
-
-    if (!(__is_not_res_op1) && !(__is_not_res_op2)){
-        // both are res
-        switch (Z_TYPE_P(op1_res)) {
-            case IS_LONG:
-                switch (Z_TYPE_P(op2_res)) {
-                    case IS_RESOURCE:
-                    case IS_OBJECT:
-                    case IS_ARRAY:
-                    {
-                        // get op2 expr
-                        std::string op_expr;
-                        retrieve_ref_by_expr(Z_RES_VAL_P(op2), op_expr, "Int", __line_number);
-                        __equal_then_else(
-                                smt_sink->add_equal(op_expr, Z_LVAL_P(op1_res), __line_number);,
-                                smt_sink->add_nequal(op_expr, Z_LVAL_P(op1_res), __line_number);
-                        )
-                        break;
-                    }
-                    default:
-                        php_printf("Constant value comparison at %d\n", __line_number);
-                }
-                break;
-            case IS_TRUE:
-                switch (Z_TYPE_P(op2_res)) {
-                    case IS_RESOURCE:
-                    case IS_OBJECT:
-                    case IS_ARRAY:
-                    {
-                        // get op2 expr
-                        std::string op_expr;
-                        retrieve_ref_by_expr(Z_RES_VAL_P(op2), op_expr, "Bool", __line_number);
-                        __equal_then_else(
-                            smt_sink->add_equal(op_expr, true, __line_number);,
-                            smt_sink->add_nequal(op_expr, true, __line_number);
-                        )
-
-                        break;
-                    }
-                    default:
-                        php_printf("Constant value comparison at %d\n", __line_number);
-                }
-                break;
-            case IS_FALSE:
-                switch (Z_TYPE_P(op2_res)) {
-                    case IS_RESOURCE:
-                    case IS_OBJECT:
-                    case IS_ARRAY:
-                    {
-                        // get op2 expr
-                        std::string op_expr;
-                        retrieve_ref_by_expr(Z_RES_VAL_P(op2), op_expr, "Bool", __line_number);
-                        __equal_then_else(
-                            smt_sink->add_equal(op_expr, false, __line_number);,
-                            smt_sink->add_nequal(op_expr, false, __line_number);
-                        )
-                        break;
-                    }
-                    default:
-                        php_printf("Constant value comparison at %d\n", __line_number);
-                }
-                break;
-            case IS_RESOURCE:
-            case IS_OBJECT:
-            case IS_ARRAY:
-            {
-                std::string _op1_expr;
-                std::string _op2_expr;
-                switch (Z_TYPE_P(op2_res)) {
-                    case IS_RESOURCE:
-                    case IS_OBJECT:
-                    case IS_ARRAY:
-                    {
-                        // get op2 expr
-                        retrieve_ref_by_expr(Z_RES_VAL_P(op2), _op1_expr, "Int", __line_number);
-                        retrieve_ref_by_expr(Z_RES_VAL_P(op2), _op2_expr, "Int", __line_number);
-                        __equal_then_else(
-                                smt_sink->add_equal_expr(_op1_expr, _op2_expr, __line_number);,
-                                smt_sink->add_nequal_expr(_op1_expr, _op2_expr, __line_number);
-                        )
-                        break;
-                    }
-                    case IS_LONG:
-                    case IS_TRUE:
-                    case IS_FALSE:
-                        return handle_equal(execute_data, op2, op1, is_equal, T);
-                    default:
-                        php_printf("Constant value comparison at %d\n", __line_number);
-                }
-                break;
-            }
-            default:
-                php_printf("UNKNOWN OP: Unsupported type %d at %d\n", Z_TYPE_P(op2_res), __line_number);
-        }
-    }
-
-
+bool is_too_deep(char* path){
+    return imaxabs(countSlash(path) - FP_SLASH_COUNT) > MAX_DEPTH;
 }
 
 
 static int conc_collect(zend_execute_data *execute_data)
 {
-    zval* op1 = get_zval(execute_data, execute_data->opline->op1_type, &execute_data->opline->op1);
-    zval* op2 = get_zval(execute_data, execute_data->opline->op2_type, &execute_data->opline->op2);
-    zval* result = get_zval(execute_data, execute_data->opline->result_type, &execute_data->opline->result);
-    php_printf("================= lo: %d =================\n", execute_data->opline->lineno);
-
-    unsigned int callback_code;
-    switch (execute_data->opline->opcode) {
-        case ZEND_ASSIGN:
-            handle_assign(execute_data, op1, op2, callback_code);
-            break;
-        case ZEND_IS_EQUAL:
-            is_equal_function(result, op1, op2);
-            auto is_equal = Z_TYPE_P(result) == IS_TRUE;
-            handle_equal(execute_data, op1, op2, is_equal, callback_code);
-            break;
+    if (!is_too_deep(ZSTR_VAL(EX(func)->op_array.filename))){
+        zval* op1 = get_zval(execute_data, execute_data->opline->op1_type, &execute_data->opline->op1);
+        zval* op2 = get_zval(execute_data, execute_data->opline->op2_type, &execute_data->opline->op2);
+        zval* result = get_zval(execute_data, execute_data->opline->result_type, &execute_data->opline->result);
+        switch (execute_data->opline->opcode) {
+            case ZEND_IS_EQUAL:
+            case ZEND_IS_NOT_EQUAL:
+            case ZEND_CASE:
+            b_comp(is_equal_function)
+            case ZEND_IS_IDENTICAL:
+            case ZEND_IS_NOT_IDENTICAL:
+            b_comp(is_identical_function)
+            case ZEND_IS_SMALLER:
+            b_comp(is_smaller_function)
+            case ZEND_IS_SMALLER_OR_EQUAL:
+            b_comp(is_smaller_or_equal_function)
+            case ZEND_SPACESHIP:
+                // seems no one is using this esoteric bla....
+                break;
+        }
     }
-
     return ZEND_USER_OPCODE_DISPATCH;
 }
 
 
-PHP_MINIT_FUNCTION(pcon)
+PHP_MINIT_FUNCTION(hsfuzz)
 {
-    smt_sink = new smt();
+    return SUCCESS;
+}
+
+PHP_MSHUTDOWN_FUNCTION(hsfuzz)
+{
+    return SUCCESS;
+}
+
+char COV_FILE_NAME[1 << 8];
+PHP_RINIT_FUNCTION(hsfuzz)
+{
+    zend_string *server_str = zend_string_init("_SERVER", sizeof("_SERVER") - 1, 0);
+    zend_is_auto_global(server_str);
+    auto carrier = zend_hash_str_find(&EG(symbol_table), ZEND_STRL("_SERVER"));
+    auto file_path = zend_hash_str_find(Z_ARRVAL_P(carrier),
+                                          "SCRIPT_FILENAME",
+                                          sizeof("SCRIPT_FILENAME") - 1);
+    char* file_path_s = Z_STRVAL_P(file_path);
+    FP_SLASH_COUNT = countSlash(file_path_s);
+    for (unsigned char & i : bitmap)
+        i = '0';
+    auto cov_file_loc = zend_hash_str_find(Z_ARRVAL_P(carrier),
+                                        "HTTP_COV_LOC",
+                                        sizeof("HTTP_COV_LOC") - 1);
+
+    if (cov_file_loc == nullptr){
+        time_t t = time(nullptr);
+        sprintf(COV_FILE_NAME, "cov/%ld.txt", t);
+    } else {
+        sprintf(COV_FILE_NAME, "cov/%s.txt", Z_STRVAL_P(cov_file_loc));
+    }
+
     zend_set_user_opcode_handler(ZEND_IS_EQUAL, conc_collect);
-    zend_set_user_opcode_handler(ZEND_ADD, conc_collect);
-    zend_set_user_opcode_handler(ZEND_ASSIGN, conc_collect);
+    zend_set_user_opcode_handler(ZEND_IS_NOT_EQUAL, conc_collect);
+    zend_set_user_opcode_handler(ZEND_CASE, conc_collect);
+    zend_set_user_opcode_handler(ZEND_IS_IDENTICAL, conc_collect);
+    zend_set_user_opcode_handler(ZEND_IS_NOT_IDENTICAL, conc_collect);
+    zend_set_user_opcode_handler(ZEND_IS_SMALLER, conc_collect);
+    zend_set_user_opcode_handler(ZEND_IS_SMALLER_OR_EQUAL, conc_collect);
     return SUCCESS;
 }
 
-PHP_MSHUTDOWN_FUNCTION(pcon)
+PHP_RSHUTDOWN_FUNCTION(hsfuzz)
 {
-//    Z3_del_context(ctx);
-    delete smt_sink;
+    std::ofstream cov_file;
+    cov_file.open(COV_FILE_NAME);
+    for (unsigned char & i : bitmap)
+        if (i == 0)
+            i += 1;
+    bitmap[(BM_SIZE) - 1] = 0;
+    cov_file << bitmap;
+    cov_file.close();
     return SUCCESS;
 }
 
 
-/* Argument info for each function, used for reflection */
-ZEND_BEGIN_ARG_INFO_EX(arginfo_pcon_nop, 0, 1, 0)
-    ZEND_ARG_TYPE_INFO(0, str, IS_STRING, 1)
-ZEND_END_ARG_INFO()
-
-/* Add all functions. (Keep PHP_FE_END as last element) */
-static const zend_function_entry functions[] = {
-    PHP_FE(pcon_nop, arginfo_pcon_nop)
-    PHP_FE_END
-};
-
-zend_module_entry pcon_module_entry = {
+zend_module_entry hsfuzz_module_entry = {
     STANDARD_MODULE_HEADER,
-    PHP_PCON_EXTNAME,
-    functions,
-    PHP_MINIT(pcon),
-    PHP_MSHUTDOWN(pcon),
+    PHP_HSFUZZ_EXTNAME,
     NULL,
+    PHP_MINIT(hsfuzz),
+    PHP_MSHUTDOWN(hsfuzz),
+    PHP_RINIT(hsfuzz),
+    PHP_RSHUTDOWN(hsfuzz),
     NULL,
-    NULL,
-    PHP_PCON_VERSION,
+    PHP_HSFUZZ_VERSION,
     STANDARD_MODULE_PROPERTIES
 };
 
-#ifdef COMPILE_DL_PCON
+#ifdef COMPILE_DL_HSFUZZ
 extern "C" {
-    ZEND_GET_MODULE(pcon)
+    ZEND_GET_MODULE(hsfuzz)
 }
 #endif
-
-/* Replace the example function with something better :) */
-PHP_FUNCTION(pcon_nop)
-{
-    zend_string *str;
-    ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 1)
-        Z_PARAM_STR(str)
-    ZEND_PARSE_PARAMETERS_END();
-    php_printf("2\n");
-
-    RETVAL_STR(str);
-}
-
 
 #endif

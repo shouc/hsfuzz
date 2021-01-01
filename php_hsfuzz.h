@@ -28,24 +28,24 @@
   +----------------------------------------------------------------------+
 */
 
-#ifndef PHP_PCON_H
-#define PHP_PCON_H 1
+#ifndef PHP_HSFUZZ_H
+#define PHP_HSFUZZ_H 1
 
-#define PHP_PCON_VERSION "0.0.1-dev"
-#define PHP_PCON_EXTNAME "pcon"
+#define PHP_HSFUZZ_VERSION "0.0.1-dev"
+#define PHP_HSFUZZ_EXTNAME "hsfuzz"
 
 #ifdef PHP_WIN32
-# define PHP_PCON_API __declspec(dllexport)
+# define PHP_HSFUZZ_API __declspec(dllexport)
 #elif defined(__GNUC__) && __GNUC__ >= 4
-# define PHP_PCON_API __attribute__ ((visibility("default")))
+# define PHP_HSFUZZ_API __attribute__ ((visibility("default")))
 #else
-# define PHP_PCON_API
+# define PHP_HSFUZZ_API
 #endif
 
 /* Declare all functions and classes of the extension */
-static PHP_FUNCTION(pcon_nop);
+static PHP_FUNCTION(hsfuzz_nop);
 
-extern zend_module_entry pcon_module_entry;
+extern zend_module_entry hsfuzz_module_entry;
 
 #endif
 
