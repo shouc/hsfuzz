@@ -13,6 +13,17 @@ On 12 cores 96G RAM machine with 20 threads fuzzing `test/` hosted using Nginx a
 | Netsparker | 140.88s | 50%      |
 | PHP-Fuzzer (Modified) | 72.06s  | 100%     |
 
+
+Coverage result after 1 minute:
+
+| Web App       | # Edge Buckets |
+|------------|---------|
+| Test     | 3    |
+| Wordpress     | 832    |
+| Wordpress w/ Plugins    | 1678    |
+| WeCTF Corbra    | 12    |
+
+
 ### Download
 ```bash
 git clone https://github.com/shouc/hsfuzz.git && cd hsfuzz

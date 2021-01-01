@@ -57,7 +57,6 @@ std::map<size_t, size_t> hash_map;
     {                \
         func(result, op1, op2);\
         auto is_equal = Z_TYPE_P(result) == IS_TRUE; \
-        php_printf("%lu", _hash);             \
         bm_loc += 1; \
         break;\
     }
