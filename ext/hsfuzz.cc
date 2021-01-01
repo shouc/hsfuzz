@@ -50,22 +50,19 @@ zval *get_zval(zend_execute_data *zdata, int node_type, const znode_op *node)
     zval* r = zend_get_zval_ptr(zdata->opline, node_type, node, zdata, &should_free, BP_VAR_IS);
     return r;
 }
-
-#define BM_SIZE 1<<8
-#define BM_SIZE_MA 1<<7
-unsigned char bitmap[BM_SIZE];
+std::map<size_t, size_t> hash_map;
 #define line_number execute_data->opline->lineno
-#define bm_loc bitmap[(line_number % (BM_SIZE_MA)) << (is_equal ? 1 : 0)]
+#define bm_loc hash_map[_hash]
 #define b_comp(func) \
     {                \
         func(result, op1, op2);\
-        auto is_equal = Z_TYPE_P(result) == IS_TRUE;\
+        auto is_equal = Z_TYPE_P(result) == IS_TRUE; \
+        php_printf("%lu", _hash);             \
         bm_loc += 1; \
-        bm_loc %= 127;       \
         break;\
     }
 #define MAX_DEPTH 1
-unsigned int countSlash(char* path){
+unsigned int count_slash(char* path){
     unsigned int count = 0;
     char* curr_path(path);
     while (*curr_path != 0){
@@ -75,16 +72,45 @@ unsigned int countSlash(char* path){
     }
     return count;
 }
+
+void to_file_path(char* path){
+    char* curr_path(path);
+    char* last_slash(path);
+    while (*curr_path != 0){
+        if (*curr_path == '/')
+            last_slash = curr_path;
+        curr_path++;
+    }
+    *last_slash = 0;
+}
+
 unsigned int FP_SLASH_COUNT;
 
 bool is_too_deep(char* path){
-    return imaxabs(countSlash(path) - FP_SLASH_COUNT) > MAX_DEPTH;
+    return imaxabs(count_slash(path) - FP_SLASH_COUNT) > MAX_DEPTH;
 }
 
+size_t hash(const char* p, size_t s) {
+    size_t result = 0;
+    const size_t prime = 17;
+    for (size_t i = 0; i < s; ++i) {
+        result = p[i] + (result * prime);
+    }
+    return result;
+}
 
 static int conc_collect(zend_execute_data *execute_data)
 {
-    if (!is_too_deep(ZSTR_VAL(EX(func)->op_array.filename))){
+    if (EX(func)->op_array.filename == nullptr ||
+        !is_too_deep(ZSTR_VAL(EX(func)->op_array.filename))){
+        auto file_name = EX(func)->op_array.filename;
+        char hash_inp[1 << 12]; int hash_inp_len;
+        if (file_name == nullptr){
+            hash_inp_len = sprintf(hash_inp, "NF@%d", line_number);
+        } else {
+            hash_inp_len = sprintf(hash_inp, "%s@%d", ZSTR_VAL(file_name), line_number);
+        }
+        auto _hash = hash(hash_inp, hash_inp_len);
         zval* op1 = get_zval(execute_data, execute_data->opline->op1_type, &execute_data->opline->op1);
         zval* op2 = get_zval(execute_data, execute_data->opline->op2_type, &execute_data->opline->op2);
         zval* result = get_zval(execute_data, execute_data->opline->result_type, &execute_data->opline->result);
@@ -119,9 +145,10 @@ PHP_MSHUTDOWN_FUNCTION(hsfuzz)
     return SUCCESS;
 }
 
-char COV_FILE_NAME[1 << 8];
+char COV_FILE_NAME[1 << 12];
 PHP_RINIT_FUNCTION(hsfuzz)
 {
+    hash_map.clear();
     zend_string *server_str = zend_string_init("_SERVER", sizeof("_SERVER") - 1, 0);
     zend_is_auto_global(server_str);
     auto carrier = zend_hash_str_find(&EG(symbol_table), ZEND_STRL("_SERVER"));
@@ -129,18 +156,18 @@ PHP_RINIT_FUNCTION(hsfuzz)
                                           "SCRIPT_FILENAME",
                                           sizeof("SCRIPT_FILENAME") - 1);
     char* file_path_s = Z_STRVAL_P(file_path);
-    FP_SLASH_COUNT = countSlash(file_path_s);
-    for (unsigned char & i : bitmap)
-        i = '0';
+    FP_SLASH_COUNT = count_slash(file_path_s);
     auto cov_file_loc = zend_hash_str_find(Z_ARRVAL_P(carrier),
                                         "HTTP_COV_LOC",
                                         sizeof("HTTP_COV_LOC") - 1);
 
+    to_file_path(file_path_s);
+
     if (cov_file_loc == nullptr){
         time_t t = time(nullptr);
-        sprintf(COV_FILE_NAME, "cov/%ld.txt", t);
+        sprintf(COV_FILE_NAME, "%s/cov/%ld.txt", file_path_s, t);
     } else {
-        sprintf(COV_FILE_NAME, "cov/%s.txt", Z_STRVAL_P(cov_file_loc));
+        sprintf(COV_FILE_NAME, "%s/cov/%s.txt", file_path_s, Z_STRVAL_P(cov_file_loc));
     }
 
     zend_set_user_opcode_handler(ZEND_IS_EQUAL, conc_collect);
@@ -157,11 +184,10 @@ PHP_RSHUTDOWN_FUNCTION(hsfuzz)
 {
     std::ofstream cov_file;
     cov_file.open(COV_FILE_NAME);
-    for (unsigned char & i : bitmap)
-        if (i == 0)
-            i += 1;
-    bitmap[(BM_SIZE) - 1] = 0;
-    cov_file << bitmap;
+    cov_file << '{';
+    for (auto it : hash_map)
+        cov_file << it.first << ":" << it.second << ",";
+    cov_file << '}';
     cov_file.close();
     return SUCCESS;
 }
