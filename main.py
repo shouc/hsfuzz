@@ -69,7 +69,7 @@ def crawl_with_eval(link):
     result, cov_uuid = crawl_link(link)
     if result.status_code in config.DONT_CARE_STATUS_CODE:
         return False
-    config.RESP_HANDLER(result)
+    customization.RESP_HANDLER(result)
 
     has_new_cov = cov.evaluate_cov(cov_uuid)
     # priority = prior.evaluate_prior(result)

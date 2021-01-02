@@ -20,8 +20,3 @@ WAIT_TIME = 1
 IGNORE_LINKS = [re.compile("logout")]
 DONT_CARE_STATUS_CODE = [404, 502, 500, 403]
 
-def handler(result):
-    return 1
-
-
-RESP_HANDLER = handler
