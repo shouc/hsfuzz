@@ -40,6 +40,8 @@
 #include <map>
 #include <sstream>
 #include <fstream>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #define HAVE_HSFUZZ 1
 #if HAVE_HSFUZZ
@@ -50,9 +52,21 @@ zval *get_zval(zend_execute_data *zdata, int node_type, const znode_op *node)
     zval* r = zend_get_zval_ptr(zdata->opline, node_type, node, zdata, &should_free, IS_VAR);
     return r;
 }
-std::map<size_t, size_t> hash_map;
+ZEND_BEGIN_MODULE_GLOBALS(hm)
+    std::map<size_t, size_t>   hash_map;
+ZEND_END_MODULE_GLOBALS(hm)
+
+
+#ifdef ZTS
+#define HM_G(v) TSRMG(hm_globals_id, zend_hm_globals *, v)
+#else
+#define HM_G(v) (hm_globals.v)
+#endif
+ZEND_DECLARE_MODULE_GLOBALS(hm)
+
+
 #define line_number execute_data->opline->lineno
-#define bm_loc hash_map[_hash]
+#define bm_loc HM_G(hash_map)[_hash]
 #define b_comp(func) \
     {                \
         func(result, op1, op2);\
@@ -101,9 +115,12 @@ size_t hash(const char* p, size_t s) {
 #define corbfuzz_ht arr
 #define corbfuzz_hav corbfuzz_ht->arData->val
 bool is_corbfuzz_query(zval* x){
+    if (x->u1.v.u.extra >= 66){
+        return true;
+    }
     if (Z_TYPE_P(x) == IS_ARRAY){
         auto arr = Z_ARR_P(x);
-        if (Z_TYPE(corbfuzz_hav) == IS_LONG && corbfuzz_hav.value.lval == CORBFUZZ_MAGIC_NUM){
+        if (Z_TYPE(corbfuzz_hav) == IS_STRING && strcmp(Z_STRVAL(corbfuzz_hav), "1333333337") == 0){
             return true;
         }
     }
@@ -123,14 +140,13 @@ inline std::string get_query_str(zval* symbolic_var) {
     return _query_str;
 }
 
+
+
 #define decl_handler(t) void t(zval* symbolic_var)
 #define decr_ref symbolic_var->value.counted->gc.refcount--;
 
 decl_handler(do_int){
-    decr_ref;
-    symbolic_var->value.arr->arData[1].val.value.counted->gc.refcount--;
-    symbolic_var->value.arr->arData[2].val.value.counted->gc.refcount--;
-    ZVAL_LONG(symbolic_var, 1);
+
 }
 
 decl_handler(do_double){
@@ -147,20 +163,65 @@ decl_handler(do_string){
 
 }
 
+void notifyType(const std::string& type, char* seed, int field_c){
+    struct sockaddr_un server_addr;
+
+    // setup socket address structure
+    bzero(&server_addr,sizeof(server_addr));
+    server_addr.sun_family = AF_UNIX;
+    strncpy(server_addr.sun_path, "/tmp/rand.sock",sizeof(server_addr.sun_path) - 1);
+
+    // create socket
+    auto server_ = socket(PF_UNIX,SOCK_STREAM,0);
+    if (!server_) {
+        php_printf("socket err");
+        return;
+    }
+
+    // connect to server
+    if (connect(server_,(const struct sockaddr *)&server_addr,sizeof(server_addr)) < 0) {
+        php_printf("connect err");
+        exit(-1);
+    }
+    std::string seed_s(seed);
+    seed_s = seed_s + "%%" +  type + "%%" + std::to_string(field_c) + "%%1";
+
+    send(server_, seed_s.c_str(), seed_s.size(),0);
+    close(server_);
+}
+
 void synthesize(zval* symbolic_var, zval* concrete_val){
 //    php_printf("Handling CorbFuzz Synthesis\n");
+
+// get seed
+    zend_string *server_str = zend_string_init("_SERVER", sizeof("_SERVER") - 1, 0);
+    zend_is_auto_global(server_str);
+    zval* carrier = zend_hash_str_find(&EG(symbol_table), ZEND_STRL("_SERVER"));
+    zval* seed = zend_hash_str_find(Z_ARRVAL_P(carrier),
+                                    "HTTP_SEED",
+                                    sizeof("HTTP_SEED") - 1);
+    if (seed == nullptr)
+        return;
+
+    char* seed_s = Z_STRVAL_P(seed);
+    auto field_c = symbolic_var->u1.v.u.extra - 66;
+
     switch (Z_TYPE_P(concrete_val)) {
         case IS_LONG:
-            return do_int(symbolic_var);
+            do_int(symbolic_var);
+            return notifyType("1", seed_s, field_c);
         case IS_DOUBLE:
-            return do_double(symbolic_var);
+            do_double(symbolic_var);
+            return notifyType("2", seed_s, field_c);
         case IS_UNDEF:
             return do_null(symbolic_var);
         case IS_FALSE:
         case IS_TRUE:
-            return do_bool(symbolic_var);
+            do_bool(symbolic_var);
+            return notifyType("3", seed_s, field_c);
         case IS_STRING:
-            return do_string(symbolic_var);
+            do_string(symbolic_var);
+            return notifyType("4", seed_s, field_c);
         case IS_REFERENCE:
             return synthesize(symbolic_var, Z_REFVAL_P(concrete_val));
     }
@@ -184,8 +245,6 @@ static int conc_collect(zend_execute_data *execute_data)
         } else if (is_op2_sym){
             synthesize(op2, op1);
         }
-
-
 
         auto file_name = EX(func)->op_array.filename;
         char hash_inp[1 << 12]; int hash_inp_len;
@@ -230,7 +289,7 @@ PHP_MSHUTDOWN_FUNCTION(hsfuzz)
 char COV_FILE_NAME[1 << 12];
 PHP_RINIT_FUNCTION(hsfuzz)
 {
-    hash_map.clear();
+    HM_G(hash_map).clear();
     zend_string *server_str = zend_string_init("_SERVER", sizeof("_SERVER") - 1, 0);
     zend_is_auto_global(server_str);
     auto carrier = zend_hash_str_find(&EG(symbol_table), ZEND_STRL("_SERVER"));
@@ -267,7 +326,7 @@ PHP_RSHUTDOWN_FUNCTION(hsfuzz)
     std::ofstream cov_file;
     cov_file.open(COV_FILE_NAME);
     cov_file << '{';
-    for (auto it : hash_map)
+    for (auto it : HM_G(hash_map))
         cov_file << it.first << ":" << it.second << ",";
     cov_file << '}';
     cov_file.close();

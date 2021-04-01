@@ -4,7 +4,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/home/shou/coding/hsfuzz/corbfuzz/hsfuzz.cc" "/home/shou/coding/hsfuzz/corbfuzz/cmake-build-debug/CMakeFiles/___.dir/hsfuzz.cc.o"
+  "/home/shou/coding/hsfuzz/corbfuzz_ext/hsfuzz.cc" "/home/shou/coding/hsfuzz/corbfuzz_ext/cmake-build-debug/CMakeFiles/___.dir/hsfuzz.cc.o"
   )
 set(CMAKE_CXX_COMPILER_ID "Clang")
 

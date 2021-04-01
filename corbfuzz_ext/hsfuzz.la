@@ -32,4 +32,4 @@ dlopen=''
 dlpreopen=''
 
 # Directory that this library needs to be installed in:
-libdir='/home/shou/coding/hsfuzz/corbfuzz/modules'
+libdir='/home/shou/coding/hsfuzz/corbfuzz_ext/modules'

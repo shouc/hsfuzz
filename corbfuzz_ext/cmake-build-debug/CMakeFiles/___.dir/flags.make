@@ -6,5 +6,5 @@ CXX_FLAGS = -g -fPIC   -std=gnu++11
 
 CXX_DEFINES = -DHAVE_SKELETON -D____EXPORTS
 
-CXX_INCLUDES = -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/Zend -I/usr/local/include/php/TSRM -I/home/shou/coding/hsfuzz/corbfuzz/.. 
+CXX_INCLUDES = -I/usr/local/include/php -I/usr/local/include/php/main -I/usr/local/include/php/Zend -I/usr/local/include/php/TSRM -I/home/shou/coding/hsfuzz/corbfuzz_ext/.. 
 

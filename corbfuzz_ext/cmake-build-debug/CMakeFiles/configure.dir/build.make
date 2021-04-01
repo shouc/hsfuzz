@@ -54,19 +54,19 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = /snap/clion/139/bin/cmake/linux/bin/cmake
+CMAKE_COMMAND = /snap/clion/145/bin/cmake/linux/bin/cmake
 
 # The command to remove a file.
-RM = /snap/clion/139/bin/cmake/linux/bin/cmake -E rm -f
+RM = /snap/clion/145/bin/cmake/linux/bin/cmake -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/shou/coding/hsfuzz/corbfuzz
+CMAKE_SOURCE_DIR = /home/shou/coding/hsfuzz/corbfuzz_ext
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/shou/coding/hsfuzz/corbfuzz/cmake-build-debug
+CMAKE_BINARY_DIR = /home/shou/coding/hsfuzz/corbfuzz_ext/cmake-build-debug
 
 # Utility rule file for configure.
 
@@ -75,7 +75,7 @@ include CMakeFiles/configure.dir/progress.make
 
 CMakeFiles/configure: ../php_hsfuzz.h
 CMakeFiles/configure: ../hsfuzz.cc
-	cd /home/shou/coding/hsfuzz/corbfuzz && phpize && configure
+	cd /home/shou/coding/hsfuzz/corbfuzz_ext && phpize && configure
 
 configure: CMakeFiles/configure
 configure: CMakeFiles/configure.dir/build.make
@@ -92,6 +92,6 @@ CMakeFiles/configure.dir/clean:
 .PHONY : CMakeFiles/configure.dir/clean
 
 CMakeFiles/configure.dir/depend:
-	cd /home/shou/coding/hsfuzz/corbfuzz/cmake-build-debug && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/shou/coding/hsfuzz/corbfuzz /home/shou/coding/hsfuzz/corbfuzz /home/shou/coding/hsfuzz/corbfuzz/cmake-build-debug /home/shou/coding/hsfuzz/corbfuzz/cmake-build-debug /home/shou/coding/hsfuzz/corbfuzz/cmake-build-debug/CMakeFiles/configure.dir/DependInfo.cmake --color=$(COLOR)
+	cd /home/shou/coding/hsfuzz/corbfuzz_ext/cmake-build-debug && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/shou/coding/hsfuzz/corbfuzz_ext /home/shou/coding/hsfuzz/corbfuzz_ext /home/shou/coding/hsfuzz/corbfuzz_ext/cmake-build-debug /home/shou/coding/hsfuzz/corbfuzz_ext/cmake-build-debug /home/shou/coding/hsfuzz/corbfuzz_ext/cmake-build-debug/CMakeFiles/configure.dir/DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/configure.dir/depend
 

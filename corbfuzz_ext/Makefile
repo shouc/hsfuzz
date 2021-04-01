@@ -1,7 +1,7 @@
-srcdir = /home/shou/coding/hsfuzz/corbfuzz
-builddir = /home/shou/coding/hsfuzz/corbfuzz
-top_srcdir = /home/shou/coding/hsfuzz/corbfuzz
-top_builddir = /home/shou/coding/hsfuzz/corbfuzz
+srcdir = /home/shou/coding/hsfuzz/corbfuzz_ext
+builddir = /home/shou/coding/hsfuzz/corbfuzz_ext
+top_srcdir = /home/shou/coding/hsfuzz/corbfuzz_ext
+top_builddir = /home/shou/coding/hsfuzz/corbfuzz_ext
 EGREP = /usr/bin/grep -E
 SED = /usr/bin/sed
 CONFIGURE_COMMAND = './configure'
@@ -21,7 +21,7 @@ prefix = /usr/local
 exec_prefix = $(prefix)
 libdir = ${exec_prefix}/lib
 prefix = /usr/local
-phplibdir = /home/shou/coding/hsfuzz/corbfuzz/modules
+phplibdir = /home/shou/coding/hsfuzz/corbfuzz_ext/modules
 phpincludedir = /usr/local/include/php
 CC = cc
 CFLAGS = -g -O0
@@ -205,8 +205,8 @@ package.xml: php_$(PHP_PECL_EXTENSION).h
 	$(PHP_EXECUTABLE) build-packagexml.php
 
 .PHONY: all clean install distclean test prof-gen prof-clean prof-use clean-tests mrproper info
-hsfuzz.lo: /home/shou/coding/hsfuzz/corbfuzz/hsfuzz.cc
-	$(LIBTOOL) --mode=compile $(CXX)  -I. -I/home/shou/coding/hsfuzz/corbfuzz $(COMMON_FLAGS) $(CXXFLAGS_CLEAN) $(EXTRA_CXXFLAGS)  -c /home/shou/coding/hsfuzz/corbfuzz/hsfuzz.cc -o hsfuzz.lo 
+hsfuzz.lo: /home/shou/coding/hsfuzz/corbfuzz_ext/hsfuzz.cc
+	$(LIBTOOL) --mode=compile $(CXX)  -I. -I/home/shou/coding/hsfuzz/corbfuzz_ext $(COMMON_FLAGS) $(CXXFLAGS_CLEAN) $(EXTRA_CXXFLAGS)  -c /home/shou/coding/hsfuzz/corbfuzz_ext/hsfuzz.cc -o hsfuzz.lo 
 $(phplibdir)/hsfuzz.la: ./hsfuzz.la
 	$(LIBTOOL) --mode=install cp ./hsfuzz.la $(phplibdir)
 

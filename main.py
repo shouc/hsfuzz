@@ -36,14 +36,14 @@ def should_ignore_link(link: str):
     return False
 
 
-def extract_links(content: str) -> [str]:
+def extract_links(content: str, seed: int) -> [str]:
     soup = BeautifulSoup(content, features="lxml")
     for link in soup.findAll('a', attrs={'href': re.compile(".+?")}):
         link = link_to_url(link["href"])
         if link == '':
             continue
-        if not utils.REDIS_OBJ.hexists("already_crawled", link) and not should_ignore_link(link):
-            crawl_with_eval(link)
+        if not utils.REDIS_OBJ.hexists("already_crawled", f"{link}%%{seed}") and not should_ignore_link(link):
+            crawl_with_eval(link, seed)
 
 
 def get_link_from_redis():
@@ -53,20 +53,21 @@ def get_link_from_redis():
     return url
 
 
-def crawl_link(link: str):
-    utils.REDIS_OBJ.hset("already_crawled", link, "1")
+def crawl_link(link: str, seed: int):
+    utils.REDIS_OBJ.hset("already_crawled", f"{link}%%{seed}", "1")
     url = f'http://{docker_utils.get_target()}{link}'
     utils.DEBUG(url)
     cov_uuid = cov.get_cov_header()
     result = customization.REQUEST_SESSION.get(url, headers={
-        "Cov-Loc": cov_uuid
+        "Cov-Loc": cov_uuid,
+        "Seed": str(seed)
     })
-    extract_links(result.text)
+    extract_links(result.text, seed)
     return result, cov_uuid
 
 
-def crawl_with_eval(link):
-    result, cov_uuid = crawl_link(link)
+def crawl_with_eval(link, seed):
+    result, cov_uuid = crawl_link(link, seed)
     if result.status_code in config.DONT_CARE_STATUS_CODE:
         return False
     customization.RESP_HANDLER(result)
@@ -74,7 +75,7 @@ def crawl_with_eval(link):
     has_new_cov = cov.evaluate_cov(cov_uuid)
     # priority = prior.evaluate_prior(result)
     if has_new_cov:
-        utils.REDIS_OBJ.sadd("url_seed", link)
+        utils.REDIS_OBJ.sadd("url_seed", f"{link}%%{seed}")
         return True
     return False
 
@@ -82,7 +83,7 @@ def crawl_with_eval(link):
 def main(name):
     # init crawl
     utils.INFO("hsfuzz started")
-    crawl_link("")
+    crawl_link("", 1)
     print("Init finished")
     cov_count = 0
     while 1:
@@ -92,13 +93,14 @@ def main(name):
             link = get_link_from_redis()
             time.sleep(config.WAIT_TIME)
         link = link.decode("latin-1")
-        m = mutator.Mutator(link)
+        links = link.split("%%")
+        m = mutator.Mutator(links[0], links[1])
         m.mutate()
-        link = m.to_url()
-        if utils.REDIS_OBJ.hexists("already_crawled", link):
+        link, seed = m.to_url()
+        if utils.REDIS_OBJ.hexists("already_crawled", f"{link}%%{seed}"):
             continue
         utils.DEBUG(f"Working on link {link}")
-        crawl_with_eval(link)
+        crawl_with_eval(link, seed)
 
 
 

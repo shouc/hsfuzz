@@ -19,6 +19,8 @@
     "./constants": "./src/constants.js"
   },
   "dependencies": {
-    "node-sql-parser": "^3.1.0"
+    "md5": "^2.3.0",
+    "node-sql-parser": "^3.1.0",
+    "z3javascript": "git+ssh://git@github.com/ExpoSEJS/z3javascript.git"
   }
 }

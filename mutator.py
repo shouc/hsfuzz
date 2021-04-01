@@ -15,6 +15,7 @@ class Mutator:
     keys_num = []
     url_obj = ""
     cter = 0
+    seed = 0
 
     @staticmethod
     def __is_number(v: str):
@@ -29,7 +30,7 @@ class Mutator:
             except ValueError:
                 return False
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, seed: int):
         self.url_obj = urlparse(url)
         url_query = self.url_obj.query
         for i in url_query.split("&"):
@@ -48,6 +49,7 @@ class Mutator:
                     utils.ERROR(f"Failed to unserialize float {unquote(v)} due to {e}")
         self.keys_str = [x for x in self.current_args_str]
         self.keys_num = [x for x in self.current_args_num]
+        self.seed = seed
 
     def to_url(self):
         arg_str = ""
@@ -57,7 +59,7 @@ class Mutator:
                         path=self.url_obj.path,
                         params=self.url_obj.params,
                         query=arg_str[:-1] if len(arg_str) > 0 else "",
-                        fragment=''))
+                        fragment='')), self.seed
 
     # mutators
     def _flip_value(self, seed: int):
@@ -146,6 +148,10 @@ class Mutator:
             del self.current_args_num[key]
         return True
 
+    def _change_seed(self):
+        self.seed = random.randint(1, 10000)
+        return True
+
     # noinspection PyArgumentList
     def mutate(self):
         registered_mutators = [
@@ -155,7 +161,8 @@ class Mutator:
             self._add_str,
             self._update_str,
             self._remove_str,
-            self._remove_key
+            self._remove_key,
+            self._change_seed
         ]
         self.cter += 1
         if self.cter > 3:
