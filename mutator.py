@@ -148,8 +148,8 @@ class Mutator:
             del self.current_args_num[key]
         return True
 
-    def _change_seed(self):
-        self.seed = random.randint(1, 10000)
+    def _change_seed(self, seed: int):
+        self.seed = seed
         return True
 
     # noinspection PyArgumentList

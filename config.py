@@ -6,7 +6,7 @@ except ImportError:
 
 USE_DOCKER = False
 # Don't Use Docker
-TARGET = "localhost:1194"
+TARGET = "localhost:1194/"
 HOST_NAMES_CARED = [TARGET]
 
 # Use Docker

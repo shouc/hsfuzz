@@ -1,8 +1,10 @@
 import time
 import main
 from multiprocessing import Process
-for i in range(6):
+x = []
+for i in range(2):
     p1 = Process(target=main.main, args=(i,))
     p1.start()
-time.sleep(10000000)
-
+    x.append(p1)
+for i in x:
+    i.join()

@@ -566,11 +566,17 @@ const convertField = (queryInfo, types, vars, seed) => {
 }
 
 const RETRY = 10;
-
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 export const askForField = async (seed, seedIndex, field) => {
     // console.log(seed, seedIndex, field)
     // console.log(cache);
     let currentCache = cache[seed][seedIndex];
+    while (!currentCache){
+        await sleep(100);
+        currentCache = cache[seed][seedIndex];
+    }
     let queryInfo = queries[currentCache.hash]
 
     if (currentCache.vars[field]){
@@ -610,7 +616,7 @@ export const notifyType = (seed, seedIndex, typeS, field_c) => {
     queryInfo.fields[field_cache[seed][parseInt(field_c)]].type[type] += 10;
 }
 
-// console.log(addQuery("SELECT * FROM a where c = 1;1"));
+// console.log(addQuery("SELECT * FROM `houses` WHERE Area <= 75;1"));
 // askForField(1, 0, "a").then(v => console.log(1, v))
 // setTimeout(()=>{
 //     console.log(addQuery("SELECT * FROM a where c = 1;2"));

@@ -4,7 +4,7 @@ import {
  addQuery,
     askForField,
     notifyType
-} from "./query.js";
+} from "./rand.js";
 
 net.createServer((so) => {
  let server = new FMS({
@@ -26,7 +26,7 @@ net.createServer((so) => {
   // console.log(dataS)
   if (dataS[3] === "0"){
    let seedi = parseInt(dataS[1]);
-   console.log(dataS[2])
+   console.log(dataS)
 
    let res = await askForField(seed, seedi, dataS[2]);
    // console.log(res);

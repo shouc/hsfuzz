@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 import re
 import cov
 import prior
-
+from browsers import *
 
 def link_to_url(link: str) -> str:
     # discard domain, fragment, and
@@ -36,14 +36,14 @@ def should_ignore_link(link: str):
     return False
 
 
-def extract_links(content: str, seed: int) -> [str]:
+def extract_links(content: str, seed: int, selenium_obj) -> [str]:
     soup = BeautifulSoup(content, features="lxml")
     for link in soup.findAll('a', attrs={'href': re.compile(".+?")}):
         link = link_to_url(link["href"])
         if link == '':
             continue
         if not utils.REDIS_OBJ.hexists("already_crawled", f"{link}%%{seed}") and not should_ignore_link(link):
-            crawl_with_eval(link, seed)
+            crawl_with_eval(link, seed, selenium_obj)
 
 
 def get_link_from_redis():
@@ -53,21 +53,29 @@ def get_link_from_redis():
     return url
 
 
-def crawl_link(link: str, seed: int):
+def crawl_link(link: str, seed: int, selenium_obj):
     utils.REDIS_OBJ.hset("already_crawled", f"{link}%%{seed}", "1")
     url = f'http://{docker_utils.get_target()}{link}'
     utils.DEBUG(url)
     cov_uuid = cov.get_cov_header()
-    result = customization.REQUEST_SESSION.get(url, headers={
-        "Cov-Loc": cov_uuid,
-        "Seed": str(seed)
-    })
-    extract_links(result.text, seed)
+
+    def interceptor(request):
+        request.headers['Cov-Loc'] = cov_uuid
+        request.headers['Seed'] = str(seed)
+
+    # result = customization.REQUEST_SESSION.get(url, headers={
+    #     "Cov-Loc": cov_uuid,
+    #     "Seed": str(seed)
+    # })
+    selenium_obj.request_interceptor = interceptor
+    result = selenium_obj.request("GET", url)
+
+    extract_links(result.text, seed, selenium_obj)
     return result, cov_uuid
 
 
-def crawl_with_eval(link, seed):
-    result, cov_uuid = crawl_link(link, seed)
+def crawl_with_eval(link, seed, selenium_obj):
+    result, cov_uuid = crawl_link(link, seed, selenium_obj)
     if result.status_code in config.DONT_CARE_STATUS_CODE:
         return False
     customization.RESP_HANDLER(result)
@@ -80,15 +88,24 @@ def crawl_with_eval(link, seed):
     return False
 
 
+import sys
+
+
 def main(name):
     # init crawl
     utils.INFO("hsfuzz started")
-    crawl_link("", 1)
+    selenium_obj = get_selenium_obj()
+    crawl_link("", 1, selenium_obj)
+    utils.REDIS_OBJ.sadd("url_seed", f"%%1")
     print("Init finished")
     cov_count = 0
     while 1:
         link = get_link_from_redis()
+        cter = 0
         while link is None:
+            cter += 1
+            if cter > 5:
+                sys.exit(0)
             utils.INFO("Waiting for links...")
             link = get_link_from_redis()
             time.sleep(config.WAIT_TIME)
@@ -100,7 +117,7 @@ def main(name):
         if utils.REDIS_OBJ.hexists("already_crawled", f"{link}%%{seed}"):
             continue
         utils.DEBUG(f"Working on link {link}")
-        crawl_with_eval(link, seed)
+        crawl_with_eval(link, seed, selenium_obj)
 
 
 

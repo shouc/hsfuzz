@@ -63,6 +63,17 @@ ZEND_END_MODULE_GLOBALS(hm)
 #define HM_G(v) (hm_globals.v)
 #endif
 ZEND_DECLARE_MODULE_GLOBALS(hm)
+ZEND_BEGIN_MODULE_GLOBALS(seed)
+    int   seed;
+ZEND_END_MODULE_GLOBALS(seed)
+
+
+#ifdef ZTS
+#define SEED_G(v) TSRMG(seed_globals_id, zend_seed_globals *, v)
+#else
+#define SEED_G(v) (seed_globals.v)
+#endif
+ZEND_DECLARE_MODULE_GLOBALS(seed)
 
 
 #define line_number execute_data->opline->lineno
@@ -71,6 +82,7 @@ ZEND_DECLARE_MODULE_GLOBALS(hm)
     {                \
         func(result, op1, op2);\
         auto is_equal = Z_TYPE_P(result) == IS_TRUE; \
+        _hash = is_equal?_hash:_hash+1;        \
         bm_loc += 1; \
         break;\
     }
@@ -227,6 +239,23 @@ void synthesize(zval* symbolic_var, zval* concrete_val){
     }
 }
 
+void generate(zval* symbolic_var, zval* concrete_val, int ln) {
+    auto _seed = SEED_G(seed) % ln % 3;
+    symbolic_var->u1.v.u.extra = 0;
+    switch (_seed) {
+        case 0:
+            ZVAL_COPY(symbolic_var, concrete_val);
+            break;
+        case 1:
+            ZVAL_LONG(symbolic_var, CORBFUZZ_MAGIC_NUM);
+            break;
+        case 2:
+            break;
+    }
+}
+
+#define is_session(op) op->u1.v.u.extra == 8
+
 static int conc_collect(zend_execute_data *execute_data)
 {
     // collect coverage
@@ -245,6 +274,16 @@ static int conc_collect(zend_execute_data *execute_data)
         } else if (is_op2_sym){
             synthesize(op2, op1);
         }
+        if (execute_data->opline->opcode != ZEND_ISSET_ISEMPTY_DIM_OBJ){
+            if (is_session(op1) && is_session(op2)){
+
+            } else if (is_session(op1)){
+                generate(op1, op2, line_number);
+            } else if (is_session(op2)){
+                generate(op2, op1, line_number);
+            }
+        }
+
 
         auto file_name = EX(func)->op_array.filename;
         char hash_inp[1 << 12]; int hash_inp_len;
@@ -270,8 +309,23 @@ static int conc_collect(zend_execute_data *execute_data)
             case ZEND_SPACESHIP:
                 // seems no one is using this esoteric bla....
                 break;
+            case ZEND_ISSET_ISEMPTY_DIM_OBJ:
+                b_comp()
         }
     }
+    return ZEND_USER_OPCODE_DISPATCH;
+}
+
+static int setter(zend_execute_data *execute_data)
+{
+    zval* op1 = get_zval(execute_data, execute_data->opline->op1_type, &execute_data->opline->op1);
+    zval* result = get_zval(execute_data, execute_data->opline->result_type, &execute_data->opline->result);
+    if (op1->u1.v.u.extra == 8){
+        if (SEED_G(seed) % line_number % 2 == 0){
+            ZVAL_BOOL(result, false);
+        }
+    }
+    ZVAL_BOOL(result, true);
     return ZEND_USER_OPCODE_DISPATCH;
 }
 
@@ -290,9 +344,18 @@ char COV_FILE_NAME[1 << 12];
 PHP_RINIT_FUNCTION(hsfuzz)
 {
     HM_G(hash_map).clear();
+
+
     zend_string *server_str = zend_string_init("_SERVER", sizeof("_SERVER") - 1, 0);
     zend_is_auto_global(server_str);
     auto carrier = zend_hash_str_find(&EG(symbol_table), ZEND_STRL("_SERVER"));
+
+    zval* seed = zend_hash_str_find(Z_ARRVAL_P(carrier),
+                                    "HTTP_SEED",
+                                    sizeof("HTTP_SEED") - 1);
+    auto seed_s = Z_STRVAL_P(seed);
+    SEED_G(seed) = atoi(seed_s);
+
     auto file_path = zend_hash_str_find(Z_ARRVAL_P(carrier),
                                           "SCRIPT_FILENAME",
                                           sizeof("SCRIPT_FILENAME") - 1);
@@ -311,6 +374,33 @@ PHP_RINIT_FUNCTION(hsfuzz)
         sprintf(COV_FILE_NAME, "%s/cov/%s.txt", file_path_s, Z_STRVAL_P(cov_file_loc));
     }
 
+
+    zend_string *cookie_str = zend_string_init("_COOKIE", sizeof("_COOKIE") - 1, 0);
+    zend_is_auto_global(cookie_str);
+    auto cookie = zend_hash_str_find(&EG(symbol_table), ZEND_STRL("_COOKIE"));
+    cookie->u1.v.u.extra = 8;
+    auto cookie_arr = Z_ARRVAL_P(cookie);
+    cookie_arr->gc.refcount = 1;
+    if (zend_hash_next_index_insert(cookie_arr, file_path)) {
+        Z_ADDREF_P(file_path);
+    }
+    if (zend_hash_next_index_insert(cookie_arr, file_path)) {
+        Z_ADDREF_P(file_path);
+    }
+    cookie_arr->gc.refcount = 2;
+
+//    zend_string *session_str = zend_string_init("_SESSION", sizeof("_SESSION") - 1, 0);
+//    zend_is_auto_global(session_str);
+//    auto session = zend_hash_str_find(&EG(symbol_table), ZEND_STRL("_SESSION"));
+//    session->u1.v.u.extra = 8;
+//    auto session_arr = Z_ARRVAL_P(session);
+//    session_arr->gc.refcount = 1;
+//    if (zend_hash_next_index_insert(Z_ARRVAL_P(session), file_path)) {
+//        Z_ADDREF_P(file_path);
+//    }
+//    session_arr->gc.refcount = 2;
+
+
     zend_set_user_opcode_handler(ZEND_IS_EQUAL, conc_collect);
     zend_set_user_opcode_handler(ZEND_IS_NOT_EQUAL, conc_collect);
     zend_set_user_opcode_handler(ZEND_CASE, conc_collect);
@@ -318,6 +408,7 @@ PHP_RINIT_FUNCTION(hsfuzz)
     zend_set_user_opcode_handler(ZEND_IS_NOT_IDENTICAL, conc_collect);
     zend_set_user_opcode_handler(ZEND_IS_SMALLER, conc_collect);
     zend_set_user_opcode_handler(ZEND_IS_SMALLER_OR_EQUAL, conc_collect);
+    zend_set_user_opcode_handler(ZEND_ISSET_ISEMPTY_DIM_OBJ, conc_collect);
     return SUCCESS;
 }
 

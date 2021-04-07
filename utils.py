@@ -24,7 +24,8 @@ def INFO(x, name="X"):
 
 
 def DEBUG(x, name="X"):
-    print(f"{Colors.BOLD}{Colors.GREEN}[DEBUG: {name}]{Colors.ENDC}{Colors.ENDC}   {x}")
+    # print(f"{Colors.BOLD}{Colors.GREEN}[DEBUG: {name}]{Colors.ENDC}{Colors.ENDC}   {x}")
+    pass
 
 
 def ERROR(x, name="X"):
