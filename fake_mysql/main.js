@@ -4,7 +4,7 @@ import {
  addQuery,
     askForField,
     notifyType
-} from "./rand.js";
+} from "./query.js";
 
 net.createServer((so) => {
  let server = new FMS({

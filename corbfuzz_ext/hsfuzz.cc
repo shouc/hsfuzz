@@ -45,6 +45,7 @@
 
 #define HAVE_HSFUZZ 1
 #if HAVE_HSFUZZ
+#include "zend_exceptions.h"
 
 zval *get_zval(zend_execute_data *zdata, int node_type, const znode_op *node)
 {
@@ -80,7 +81,17 @@ ZEND_DECLARE_MODULE_GLOBALS(seed)
 #define bm_loc HM_G(hash_map)[_hash]
 #define b_comp(func) \
     {                \
-        func(result, op1, op2);\
+        	char tmp_filename[1<<12];\
+	time_t t = time(NULL);\
+	sprintf(tmp_filename, "/tmp/cbc/%ld.txt", t); \
+    FILE *f = fopen(tmp_filename, "a");\
+	if (f == NULL) {\
+		php_printf("Error opening file!\n");\
+		exit(1);\
+	}\
+    fprintf(f, "comp:%c%c\n", '0' + Z_TYPE_P(op1), '0' + Z_TYPE_P(op2));\
+    fclose(f);\
+        func(result, op1, op2); \
         auto is_equal = Z_TYPE_P(result) == IS_TRUE; \
         _hash = is_equal?_hash:_hash+1;        \
         bm_loc += 1; \
@@ -174,8 +185,9 @@ decl_handler(do_bool){
 decl_handler(do_string){
 
 }
-
-void notifyType(const std::string& type, char* seed, int field_c){
+#include <cstdio>
+#include <cstdlib>
+void notifyType(const std::string& type, int field_c){
     struct sockaddr_un server_addr;
 
     // setup socket address structure
@@ -195,7 +207,7 @@ void notifyType(const std::string& type, char* seed, int field_c){
         php_printf("connect err");
         exit(-1);
     }
-    std::string seed_s(seed);
+    std::string seed_s = std::to_string(SEED_G(seed));
     seed_s = seed_s + "%%" +  type + "%%" + std::to_string(field_c) + "%%1";
 
     send(server_, seed_s.c_str(), seed_s.size(),0);
@@ -206,34 +218,34 @@ void synthesize(zval* symbolic_var, zval* concrete_val){
 //    php_printf("Handling CorbFuzz Synthesis\n");
 
 // get seed
-    zend_string *server_str = zend_string_init("_SERVER", sizeof("_SERVER") - 1, 0);
-    zend_is_auto_global(server_str);
-    zval* carrier = zend_hash_str_find(&EG(symbol_table), ZEND_STRL("_SERVER"));
-    zval* seed = zend_hash_str_find(Z_ARRVAL_P(carrier),
-                                    "HTTP_SEED",
-                                    sizeof("HTTP_SEED") - 1);
-    if (seed == nullptr)
-        return;
-
-    char* seed_s = Z_STRVAL_P(seed);
+//    zend_string *server_str = zend_string_init("_SERVER", sizeof("_SERVER") - 1, 0);
+//    zend_is_auto_global(server_str);
+//    zval* carrier = zend_hash_str_find(&EG(symbol_table), ZEND_STRL("_SERVER"));
+//    zval* seed = zend_hash_str_find(Z_ARRVAL_P(carrier),
+//                                    "HTTP_SEED",
+//                                    sizeof("HTTP_SEED") - 1);
+//    if (seed == nullptr)
+//        return;
+//
+//    char* seed_s = Z_STRVAL_P(seed);
     auto field_c = symbolic_var->u1.v.u.extra - 66;
 
     switch (Z_TYPE_P(concrete_val)) {
         case IS_LONG:
             do_int(symbolic_var);
-            return notifyType("1", seed_s, field_c);
+            return notifyType("1", field_c);
         case IS_DOUBLE:
             do_double(symbolic_var);
-            return notifyType("2", seed_s, field_c);
+            return notifyType("2", field_c);
         case IS_UNDEF:
             return do_null(symbolic_var);
         case IS_FALSE:
         case IS_TRUE:
             do_bool(symbolic_var);
-            return notifyType("3", seed_s, field_c);
+            return notifyType("3", field_c);
         case IS_STRING:
             do_string(symbolic_var);
-            return notifyType("4", seed_s, field_c);
+            return notifyType("4", field_c);
         case IS_REFERENCE:
             return synthesize(symbolic_var, Z_REFVAL_P(concrete_val));
     }
@@ -255,9 +267,12 @@ void generate(zval* symbolic_var, zval* concrete_val, int ln) {
 }
 
 #define is_session(op) op->u1.v.u.extra == 8
-
+#include "zend_exceptions.h"
+#include "zend_interfaces.h"
+#include "zend_object_handlers.h"
 static int conc_collect(zend_execute_data *execute_data)
 {
+
     // collect coverage
     if (EX(func)->op_array.filename == nullptr ||
         !is_too_deep(ZSTR_VAL(EX(func)->op_array.filename))){
@@ -298,14 +313,14 @@ static int conc_collect(zend_execute_data *execute_data)
             case ZEND_IS_EQUAL:
             case ZEND_IS_NOT_EQUAL:
             case ZEND_CASE:
-            b_comp(is_equal_function)
+                b_comp(is_equal_function)
             case ZEND_IS_IDENTICAL:
             case ZEND_IS_NOT_IDENTICAL:
-            b_comp(is_identical_function)
+                b_comp(is_identical_function)
             case ZEND_IS_SMALLER:
-            b_comp(is_smaller_function)
+                b_comp(is_smaller_function)
             case ZEND_IS_SMALLER_OR_EQUAL:
-            b_comp(is_smaller_or_equal_function)
+                b_comp(is_smaller_or_equal_function)
             case ZEND_SPACESHIP:
                 // seems no one is using this esoteric bla....
                 break;
@@ -316,18 +331,18 @@ static int conc_collect(zend_execute_data *execute_data)
     return ZEND_USER_OPCODE_DISPATCH;
 }
 
-static int setter(zend_execute_data *execute_data)
-{
-    zval* op1 = get_zval(execute_data, execute_data->opline->op1_type, &execute_data->opline->op1);
-    zval* result = get_zval(execute_data, execute_data->opline->result_type, &execute_data->opline->result);
-    if (op1->u1.v.u.extra == 8){
-        if (SEED_G(seed) % line_number % 2 == 0){
-            ZVAL_BOOL(result, false);
-        }
-    }
-    ZVAL_BOOL(result, true);
-    return ZEND_USER_OPCODE_DISPATCH;
-}
+//static int setter(zend_execute_data *execute_data) moved to php-src
+//{
+//    zval* op1 = get_zval(execute_data, execute_data->opline->op1_type, &execute_data->opline->op1);
+//    zval* result = get_zval(execute_data, execute_data->opline->result_type, &execute_data->opline->result);
+//    if (op1->u1.v.u.extra == 8){
+//        if (SEED_G(seed) % line_number % 2 == 0){
+//            ZVAL_BOOL(result, false);
+//        }
+//    }
+//    ZVAL_BOOL(result, true);
+//    return ZEND_USER_OPCODE_DISPATCH;
+//}
 
 
 PHP_MINIT_FUNCTION(hsfuzz)
@@ -353,8 +368,17 @@ PHP_RINIT_FUNCTION(hsfuzz)
     zval* seed = zend_hash_str_find(Z_ARRVAL_P(carrier),
                                     "HTTP_SEED",
                                     sizeof("HTTP_SEED") - 1);
-    auto seed_s = Z_STRVAL_P(seed);
-    SEED_G(seed) = atoi(seed_s);
+
+    if (seed != nullptr){
+        auto seed_s = Z_STRVAL_P(seed);
+        SEED_G(seed) = atoi(seed_s);
+    } else {
+        SEED_G(seed) = -5;
+    }
+
+    if (SEED_G(seed) == -5){
+        php_printf("SEED_INCORR");
+    }
 
     auto file_path = zend_hash_str_find(Z_ARRVAL_P(carrier),
                                           "SCRIPT_FILENAME",

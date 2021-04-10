@@ -23,7 +23,8 @@ CUSTOM_MUTATION = []
 def handler(result):
     md5 = hashlib.md5()
     md5.update(result.text.encode("utf-8"))
-    os.system(f"echo \"{md5.hexdigest()}\" >> benchmark/page/{time.time()}.txt")
+    with open("/tmp/page/" + str(md5.hexdigest()), "w+") as fp:
+        fp.write("1")
     return 1
 
 

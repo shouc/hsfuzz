@@ -46,6 +46,15 @@ def extract_links(content: str, seed: int, selenium_obj) -> [str]:
             crawl_with_eval(link, seed, selenium_obj)
 
 
+def extract_links2(seed: int, selenium_obj) -> [str]:
+    for link in selenium_obj.requests:
+        link = link_to_url(link.url)
+        if link == '':
+            continue
+        if not utils.REDIS_OBJ.hexists("already_crawled", f"{link}%%{seed}") and not should_ignore_link(link):
+            crawl_with_eval(link, seed, selenium_obj)
+
+
 def get_link_from_redis():
     url = utils.REDIS_OBJ.srandmember("url_seed")
     if not url:
@@ -69,8 +78,11 @@ def crawl_link(link: str, seed: int, selenium_obj):
     # })
     selenium_obj.request_interceptor = interceptor
     result = selenium_obj.request("GET", url)
+    customization.RESP_HANDLER(result)
 
     extract_links(result.text, seed, selenium_obj)
+    extract_links2(seed, selenium_obj)
+
     return result, cov_uuid
 
 
@@ -78,7 +90,6 @@ def crawl_with_eval(link, seed, selenium_obj):
     result, cov_uuid = crawl_link(link, seed, selenium_obj)
     if result.status_code in config.DONT_CARE_STATUS_CODE:
         return False
-    customization.RESP_HANDLER(result)
 
     has_new_cov = cov.evaluate_cov(cov_uuid)
     # priority = prior.evaluate_prior(result)

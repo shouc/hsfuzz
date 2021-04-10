@@ -1,5 +1,38 @@
 import os
-os.chdir("/home/shou/repos_ok")
+
+
+def evaluate_cov(folder, cov):
+    bitmap_glob = {}
+    cov_count = 0
+    for covf in os.listdir(f"/home/shou/repos_ok/{folder}/{cov}/"):
+        bitmap = eval(open(f"/home/shou/repos_ok/{folder}/{cov}/{covf}").readline())
+        new_cov = False
+        for i in bitmap:
+            cnt = bitmap[i]
+            available_bucket = 0b1111
+            if i in bitmap_glob:
+                available_bucket = int(bitmap_glob[i])
+            has_new_cov = False
+            new_bucket = available_bucket
+            if cnt == 1 and available_bucket & 1:
+                has_new_cov = True
+                new_bucket &= 0b1110
+            elif cnt == 2 and available_bucket & 2:
+                has_new_cov = True
+                new_bucket &= 0b1101
+            elif cnt < 8 and available_bucket & 4:
+                has_new_cov = True
+                new_bucket &= 0b1011
+            elif available_bucket & 8:
+                has_new_cov = True
+                new_bucket &= 0b0111
+            if has_new_cov:
+                bitmap_glob[i] = new_bucket
+                new_cov = True
+        if new_cov:
+            cov_count += 1
+    return cov_count
+
 for folder in [
 "177b91c9e380d01dfd3a4df11c05ba06",
 "f3223696-be31-4e8d-9665-e9cadc7631f3",
@@ -41,31 +74,4 @@ for folder in [
 "1d404eac6640ffd0eba13257f2aa7332",
 "5d89731d56d5459ac26cc3c09b46277a"
 ]:
-    # with open(f"/home/shou/coding/hsfuzz/fake_mysql/log/{folder}") as fp:
-        # if len(fp.read()) > 28:
-        #     os.system(f"mv /home/shou/repos2/{folder} /home/shou/repos_ok/")
-    final_res1 = {}
-    final_res2 = {}
-    for i in os.listdir(folder + "/cov"):
-        path = folder + "/cov/" + i
-        with open(path) as fp:
-            content = fp.read()
-            res = eval(content)
-            for k in res:
-                final_res1[k] = 1
-
-    for i in os.listdir(folder + "/cov_rand"):
-        try:
-            path = folder + "/cov_rand/" + i
-            with open(path) as fp:
-                content = fp.read()
-                res = eval(content)
-                for k in res:
-                    final_res2[k] = 1
-        except:
-            pass
-    # if len(final_res1) == 0:
-    print(folder, len(final_res2), len(final_res1))
-    # if len(final_res) < 1: # remove websites with no index.php
-    #     os.system(f"rm -rf {folder}")
-    # os.system(f"mv {folder}/cov {folder}/cov_rand")
+    print(folder, evaluate_cov(folder, "cov"))#, evaluate_cov(folder, "cov_rand"))
